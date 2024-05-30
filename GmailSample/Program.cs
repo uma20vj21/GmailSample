@@ -44,6 +44,7 @@ namespace GmailSample
             //認証
             UserCredential credential;
 
+            // ホームディレクトリのダウンロードにファイルが置いてあるか確認
             _homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
             using (var stream = new FileStream(Path.Combine(_homeDirectory, "Downloads", "clientsecret.json"), FileMode.Open, FileAccess.Read))
             {
@@ -54,88 +55,92 @@ namespace GmailSample
                         "user",
                         CancellationToken.None,
                         new FileDataStore(credpath, true)).Result;
-            }
 
-            // GmailServiceの初期化
-            var service = new GmailService(new BaseClientService.Initializer()
-            {
-                ApplicationName = app_name,
-                HttpClientInitializer = credential
-            });
-
-            // メール一覧の取得
-            ListMessage(service, "me");
-
-
-            //メール作成
-            var mime_message = new MimeMessage();
-            mime_message.From.Add(new MailboxAddress(mail_from_name, mail_from_address));
-            mime_message.To.Add(new MailboxAddress(mail_to_name, mail_to_address));
-            mime_message.Subject = mail_subject;
-            var text_part = new TextPart(MimeKit.Text.TextFormat.Plain);
-            text_part.SetText(Encoding.UTF8, mail_body); // UTF-8エンコーディングを使用
-            mime_message.Body = text_part;
-
-            byte[] bytes;
-            using (MemoryStream memoryStream = new MemoryStream())
-            {
-                mime_message.WriteTo(memoryStream); // MimeMessageをMemoryStreamに書き込む
-                bytes = memoryStream.ToArray(); // MemoryStreamをバイト配列に変換
-            }
-
-            string raw_message = Convert.ToBase64String(bytes)
-                .Replace('+', '-')
-                .Replace('/', '_')
-                .Replace("=", "");
-
-            //メール送信
-            var result = service.Users.Messages.Send(
-              new Message()
-              {
-                  Raw = raw_message
-              },
-              "me"
-            ).Execute();
-
-            Console.WriteLine("Message ID: {0}", result.Id);
-
-            // 送信したメールの内容を表示
-            Console.WriteLine("送信したメールの内容を表示します。");
-            Console.WriteLine("========================");
-
-            // メールの取得
-            var message = service.Users.Messages.Get("me", result.Id).Execute();
-
-            // メールの送信者とタイトルを取得
-            string from = "";
-            string subject = "";
-
-            //　取得するためにMessagePartHeaderクラスに
-            //　Name プロパティが存在するかどうか確認をする
-            foreach (var header in message.Payload.Headers)
-            {
-                if (header.Name == "From")
+                // GmailServiceの初期化
+                var service = new GmailService(new BaseClientService.Initializer()
                 {
-                    from = header.Value;
-                }
-                else if (header.Name == "Subject")
+                    ApplicationName = app_name,
+                    HttpClientInitializer = credential
+                });
+
+                //メール作成
+                var mime_message = new MimeMessage();
+                mime_message.From.Add(new MailboxAddress(mail_from_name, mail_from_address));
+                mime_message.To.Add(new MailboxAddress(mail_to_name, mail_to_address));
+                mime_message.Subject = mail_subject;
+                var text_part = new TextPart(MimeKit.Text.TextFormat.Plain);
+                text_part.SetText(Encoding.UTF8, mail_body); // UTF-8エンコーディングを使用
+                mime_message.Body = text_part;
+
+                byte[] bytes;
+                using (MemoryStream memoryStream = new MemoryStream())
                 {
-                    subject = header.Value;
+                    mime_message.WriteTo(memoryStream); // MimeMessageをMemoryStreamに書き込む
+                    bytes = memoryStream.ToArray(); // MemoryStreamをバイト配列に変換
                 }
+
+                string raw_message = Convert.ToBase64String(bytes)
+                    .Replace('+', '-')
+                    .Replace('/', '_')
+                    .Replace("=", "");
+
+                //メール送信
+                var result = service.Users.Messages.Send(
+                  new Message()
+                  {
+                      Raw = raw_message
+                  },
+                  "me"
+                ).Execute();
+
+                Console.WriteLine("Message ID: {0}", result.Id);
+
+                // 送信したメールの内容を表示
+                Console.WriteLine("送信したメールの内容を表示します。");
+                Console.WriteLine("========================");
+
+                // メールの取得
+                var message = service.Users.Messages.Get("me", result.Id).Execute();
+
+                // メールの送信者とタイトルを取得
+                string from = "";
+                string subject = "";
+
+                //　取得するためにMessagePartHeaderクラスに
+                //　Name プロパティが存在するかどうか確認をする
+                foreach (var header in message.Payload.Headers)
+                {
+                    if (header.Name == "From")
+                    {
+                        from = header.Value;
+                    }
+                    else if (header.Name == "Subject")
+                    {
+                        subject = header.Value;
+                    }
+                }
+
+                // メールの内容表示
+                Console.WriteLine("from: " + from);
+                Console.WriteLine("subject: " + subject);
+                // 
+                Console.WriteLine("Message snippet: " + message.Snippet);
+                Console.WriteLine("Message payload: " + message.Payload);
+                Console.WriteLine("========================");
+
+                // ユーザー入力を促す
+                Console.WriteLine("添付ファイルのあるメールのみを表示しますか？（y/n）:");
+                var input = Console.ReadLine();
+                bool showOnlyWithAttachments = input?.ToLower() == "y";
+
+                // メールの一覧を取得して表示
+                ListMessage(service, "me", showOnlyWithAttachments);
             }
-
-            // メールの内容表示
-            Console.WriteLine("from: " + from);
-            Console.WriteLine("subject: " + subject);
-            // 
-            Console.WriteLine("Message snippet: " + message.Snippet);
-            Console.WriteLine("Message payload: " + message.Payload);
-            Console.WriteLine("========================");
-
+            Console.ReadKey(true);
         }
 
         // メール一覧を取得するメソッド
-        private static void ListMessage(GmailService service, string userId)
+        private static void ListMessage(GmailService service, string userId, bool showOnlyWithAttachments)
         {
             try
             {
@@ -147,7 +152,7 @@ namespace GmailSample
                 IList<Message> messages = request.Execute().Messages;
                 if (messages != null && messages.Count > 0)
                 {
-                    Console.WriteLine("メールタイトルと本文:");
+                    Console.WriteLine("メールタイトル、本文、添付ファイルのタイトル:");
                     foreach (var message in messages)
                     {
                         // メッセージ取得
@@ -163,15 +168,39 @@ namespace GmailSample
                             }
                         }
 
+                        // メール本文を取得
                         string body = GetMessageBody(service, userId, message.Id);
                         // string snippet = msg.Snippet;
 
                         // 添付ファイルのタイトルを取得
                         IList<string> attachmentTitles = GetMessageAttachments(service, userId, message.Id);
 
-                        Console.WriteLine($"タイトル: {subject}");
-                        // Console.WriteLine($"スニペット: {snippet}");
-                        Console.WriteLine($"本文: {body}");
+                        // 条件に応じて表示
+                        if (showOnlyWithAttachments)
+                        {
+                            if (attachmentTitles.Count > 0)
+                            {
+                                Console.WriteLine($"タイトル: {subject}");
+                                Console.WriteLine("添付ファイルのタイトル:");
+                                foreach (var title in attachmentTitles)
+                                {
+                                    Console.WriteLine(title);
+                                }
+                                Console.WriteLine($"本文: {body}");
+                                Console.WriteLine();
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine($"タイトル: {subject}");
+                            Console.WriteLine("添付ファイルのタイトル");
+                            foreach (var title in attachmentTitles)
+                            {
+                                Console.WriteLine(title);
+                            }
+                            Console.WriteLine($"本文: {body}");
+                            Console.WriteLine("");
+                        }
                     }
                 }
                 else
@@ -213,6 +242,7 @@ namespace GmailSample
             }
         }
 
+        // メールの添付ファイルのタイトルを取得するメソッド
         private static IList<string> GetMessageAttachments(GmailService service, string userId, string messageId)
         {
                 IList<string> attachmentTitles = new List<string>();
