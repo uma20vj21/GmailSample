@@ -46,6 +46,17 @@ namespace GmailSample
 
             // ホームディレクトリのダウンロードにファイルが置いてあるか確認
             _homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            string clientSecretPath = Path.Combine(_homeDirectory, "Downloads", "clientsecret.json");
+            if (!File.Exists(clientSecretPath))
+            {
+                // macOSのホームディレクトリのダウンロードフォルダから参照
+                clientSecretPath = Path.Combine(_homeDirectory, "Downloads", "clientsecret.json");
+                if (!File.Exists(clientSecretPath))
+                {
+                    Console.WriteLine("クライアントシークレットファイルが見つかりません。");
+                    return;
+                }
+            }
             using (var stream = new FileStream(Path.Combine(_homeDirectory, "Downloads", "clientsecret.json"), FileMode.Open, FileAccess.Read))
             {
                 string credpath = "token.json";
@@ -129,14 +140,34 @@ namespace GmailSample
                 Console.WriteLine("========================");
 
                 // ユーザー入力を促す
-                Console.WriteLine("添付ファイルのあるメールのみを表示しますか？（y/n）:");
-                var input = Console.ReadLine();
-                bool showOnlyWithAttachments = input?.ToLower() == "y";
+                bool showOnlyWithAttachments = GetUserInput();
 
                 // メールの一覧を取得して表示
                 ListMessage(service, "me", showOnlyWithAttachments);
             }
             Console.ReadKey(true);
+        }
+
+        // ユーザー入力を取得するメソッド
+        private static bool GetUserInput()
+        {
+            while (true)
+            {
+                Console.WriteLine("添付ファイルのあるメールのみを表示しますか？ (y/n): ");
+                var input = Console.ReadLine();
+                if (input?.ToLower() == "y")
+                {
+                    return true;
+                }
+                else if (input?.ToLower() == "n")
+                {
+                    return false;
+                }
+                else
+                {
+                    Console.WriteLine("無効な入力です。もう一度入力してください。");
+                }
+            }
         }
 
         // メール一覧を取得するメソッド
