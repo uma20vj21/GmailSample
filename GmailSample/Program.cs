@@ -207,6 +207,18 @@ namespace GmailSample
                                 break;
                             }
                         }
+                        // メール本文を取得
+                        string body = GetMessageBody(service, userId, message.Id);
+
+                        // 添付ファイルのタイトルを取得
+                        IList<string> attachmentTitles = GetMessageAttachments(service, userId, message.Id);
+
+                        if (attachmentTitles.Count > 0)
+                        {
+                            Console.WriteLine($"タイトル：{subject}");
+                            Console.WriteLine("添付ファイルのタイトル：");
+                            
+                        }
                     }
                 } 
 
