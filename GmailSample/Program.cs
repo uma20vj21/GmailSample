@@ -143,6 +143,14 @@ namespace GmailSample
                 bool showOnlyWithAttachments = GetUserInput();
 
                 // メールの一覧を取得して表示
+                if (showOnlyWithAttachments)
+                {
+                    ListMessageWithAttachment(service, "me");
+                }
+                else 
+                {
+                    ListMessageWithoutAttachment(service, "me")
+                }
                 ListMessage(service, "me", showOnlyWithAttachments);
             }
             Console.ReadKey(true);
@@ -167,6 +175,41 @@ namespace GmailSample
                 {
                     Console.WriteLine("無効な入力です。もう一度入力してください。");
                 }
+            }
+        }
+
+        // 添付ファイルがあるメールのみを表示させるメソッド
+        private static void ListMessageWithAttachment(GmailService service,string userId) 
+        {
+            try
+            {
+                // メールリストのリクエスト
+                UsersResource.MessagesResource.ListRequest request = service.Users.Messages.List(userId);
+                request.MaxResults = 10; // 最大10件のメールを取得
+
+                // メールリストの取得
+                IList<Message> messages = request.Execute().Messages;
+
+                if (messages != null && messages.Count > 0)
+                {
+                    Console.WriteLine("添付ファイルのあるメールのタイトルと本文");
+                    foreach (Message message in messages)
+                    {
+                        // メールの取得
+                        var msg = service.Users.Messages.Get(userId, message.Id).Execute();
+                        // メールのタイトルを取得
+                        string subject = "";
+                        foreach (var header in msg.Payload.Headers)
+                        {
+                            if (header.Name == "Subject")
+                            {
+                                subject = header.Value;
+                                break;
+                            }
+                        }
+                    }
+                } 
+
             }
         }
 
@@ -224,13 +267,8 @@ namespace GmailSample
                         else
                         {
                             Console.WriteLine($"タイトル: {subject}");
-                            Console.WriteLine("添付ファイルのタイトル");
-                            foreach (var title in attachmentTitles)
-                            {
-                                Console.WriteLine(title);
-                            }
                             Console.WriteLine($"本文: {body}");
-                            Console.WriteLine("");
+                            Console.WriteLine();
                         }
                     }
                 }
