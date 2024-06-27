@@ -7,6 +7,7 @@ using MimeKit;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq.Expressions;
 using System.Text;
 using System.Threading;
 
@@ -183,6 +184,7 @@ namespace GmailSample
         {
             try
             {
+                Console.WriteLine(userId);
                 // メールリストのリクエスト
                 UsersResource.MessagesResource.ListRequest request = service.Users.Messages.List(userId);
                 request.MaxResults = 10; // 最大10件のメールを取得
@@ -217,14 +219,35 @@ namespace GmailSample
                         {
                             Console.WriteLine($"タイトル：{subject}");
                             Console.WriteLine("添付ファイルのタイトル：");
-                            
+                            foreach (var title in attachmentTitles) 
+                            {
+                                Console.WriteLine(title);
+                            }
+                            Console.WriteLine($"本文：{body}");
+                            Console.WriteLine();
                         }
                     }
                 } 
-
+                else
+                {
+                    Console.WriteLine("メールが見つかりませんでした");
+                }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"メールの取得中にエラーが発生しました: {ex.Message}");
             }
         }
 
+        // 添付ファイルのないメールのみを表示するメソッド
+        private static string ListMessageWithoutAttachment(GmailService service, string userId)
+        {
+            try 
+            {
+                // メールリストのリクエスト
+                UsersResource.MessagesResource.ListRequest request = service.Users.Messages.List(userId);
+                request.MaxResults = 10; // 最大10件のメールを取得
+            }
+        }
         // メール一覧を取得するメソッド
         private static void ListMessage(GmailService service, string userId, bool showOnlyWithAttachments)
         {
