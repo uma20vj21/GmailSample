@@ -7,7 +7,6 @@ using MimeKit;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq.Expressions;
 using System.Text;
 using System.Threading;
 
@@ -295,7 +294,8 @@ namespace GmailSample
         }
 
         // メールの本文を取得するメソッド(20240629_再記述）
-        private static string GetMessageBody(MessagePart payload) {
+        // MessagePartの型が曖昧な参照になっていたため明示的に指定
+        private static string GetMessageBody(Google.Apis.Gmail.v1.Data.MessagePart payload) {
             try {
                 if(payload.Parts == null) 
                 {
@@ -344,7 +344,9 @@ namespace GmailSample
         }
 
         // メールの添付ファイルのタイトルを取得するメソッド
-        private static IList<string> GetMessageAttachments(MessagePart payload)
+        // MessagePartの型が曖昧な参照になっていたため明示的に指定
+    
+        private static IList<string> GetMessageAttachments(Google.Apis.Gmail.v1.Data.MessagePart payload)
         {
                 IList<string> attachmentTitles = new List<string>();
                 try
