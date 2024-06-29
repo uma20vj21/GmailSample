@@ -30,8 +30,6 @@ namespace GmailSample
             //メール情報
             string mail_from_name = "大嶋由真";
             string mail_from_address = "yumastudy.0201@gmail.com";
-            string mail_to_name = "大嶋由真";
-            string mail_to_address = "yumastudy.0201@gmail.com";
             string mail_subject = "テストメール";
             string mail_body = @"テストメールを送信します。
                受信確認できましたら、返事をお願いします。
@@ -74,70 +72,86 @@ namespace GmailSample
                     HttpClientInitializer = credential
                 });
 
-                //メール作成
-                var mime_message = new MimeMessage();
-                mime_message.From.Add(new MailboxAddress(mail_from_name, mail_from_address));
-                mime_message.To.Add(new MailboxAddress(mail_to_name, mail_to_address));
-                mime_message.Subject = mail_subject;
-                var text_part = new TextPart(MimeKit.Text.TextFormat.Plain);
-                text_part.SetText(Encoding.UTF8, mail_body); // UTF-8エンコーディングを使用
-                mime_message.Body = text_part;
+                // ユーザー入力で送信先メールアドレスと名前を取得
+                Console.WriteLine("送信先の名前を入力して下さい");
+                string mailToName = Console.ReadLine();
+                Console.WriteLine("送信先のメールアドレスを入力して下さい");
+                string mailToAddress = Console.ReadLine();
 
-                byte[] bytes;
-                using (MemoryStream memoryStream = new MemoryStream())
+                // メール送信確認
+                Console.WriteLine("メールを送信しますか？(y/n)：　");
+                string sendMailResponse = Console.ReadLine().ToLower();
+
+                if (sendMailResponse == "y")
                 {
-                    mime_message.WriteTo(memoryStream); // MimeMessageをMemoryStreamに書き込む
-                    bytes = memoryStream.ToArray(); // MemoryStreamをバイト配列に変換
+                    // メール作成
+                    var mime_message = new MimeMessage();
+                    mime_message.From.Add(new MailboxAddress(mail_from_name, mail_from_address));
+                    mime_message.To.Add(new MailboxAddress(mailToName, mailToAddress));
+                    mime_message.Subject = mail_subject;
+                    var text_part = new TextPart(MimeKit.Text.TextFormat.Plain);
+                    text_part.SetText(Encoding.UTF8, mail_body); // UTF-8エンコーディングを使用
+                    mime_message.Body = text_part;
+
+                    byte[] bytes;
+                    using (MemoryStream memoryStream = new MemoryStream())
+                    {
+                        mime_message.WriteTo(memoryStream); // MimeMessageをMemoryStreamに書き込む
+                        bytes = memoryStream.ToArray(); // MemoryStreamをバイト配列に変換
+                    }
+
+                    string raw_message = Convert.ToBase64String(bytes)
+                        .Replace('+', '-')
+                        .Replace('/', '_')
+                        .Replace("=", "");
+
+                    //メール送信
+                    var result = service.Users.Messages.Send(
+                    new Message()
+                    {
+                        Raw = raw_message
+                    },
+                    "me"
+                    ).Execute();
+
+                    Console.WriteLine("送信完了しました。");
+                    Console.WriteLine("Message ID: {0}", result.Id);
+
+                    // 送信したメールの内容を表示
+                    Console.WriteLine("送信したメールの内容を表示します。");
+                    Console.WriteLine("========================");
+
+                    // メールの取得
+                    var message = service.Users.Messages.Get("me", result.Id).Execute();
+
+                    // メールの送信者とタイトルを取得
+                    string from = "";
+                    string subject = "";
+
+                    //　取得するためにMessagePartHeaderクラスに
+                    //　Name プロパティが存在するかどうか確認をする
+                    foreach (var header in message.Payload.Headers)
+                    {
+                        if (header.Name == "From")
+                        {
+                            from = header.Value;
+                        }
+                        else if (header.Name == "Subject")
+                        {
+                            subject = header.Value;
+                        }
+                    }
+
+                    // メールの内容表示
+                    Console.WriteLine("from: " + from);
+                    Console.WriteLine("subject: " + subject);
+                    // 
+                    Console.WriteLine("Message snippet: " + message.Snippet);
+                    Console.WriteLine("Message payload: " + message.Payload);
+                    Console.WriteLine("========================");
                 }
 
-                string raw_message = Convert.ToBase64String(bytes)
-                    .Replace('+', '-')
-                    .Replace('/', '_')
-                    .Replace("=", "");
-
-                //メール送信
-                var result = service.Users.Messages.Send(
-                  new Message()
-                  {
-                      Raw = raw_message
-                  },
-                  "me"
-                ).Execute();
-
-                Console.WriteLine("Message ID: {0}", result.Id);
-
-                // 送信したメールの内容を表示
-                Console.WriteLine("送信したメールの内容を表示します。");
-                Console.WriteLine("========================");
-
-                // メールの取得
-                var message = service.Users.Messages.Get("me", result.Id).Execute();
-
-                // メールの送信者とタイトルを取得
-                string from = "";
-                string subject = "";
-
-                //　取得するためにMessagePartHeaderクラスに
-                //　Name プロパティが存在するかどうか確認をする
-                foreach (var header in message.Payload.Headers)
-                {
-                    if (header.Name == "From")
-                    {
-                        from = header.Value;
-                    }
-                    else if (header.Name == "Subject")
-                    {
-                        subject = header.Value;
-                    }
-                }
-
-                // メールの内容表示
-                Console.WriteLine("from: " + from);
-                Console.WriteLine("subject: " + subject);
-                // 
-                Console.WriteLine("Message snippet: " + message.Snippet);
-                Console.WriteLine("Message payload: " + message.Payload);
-                Console.WriteLine("========================");
+                
 
                 // ユーザー入力を促す
                 bool showOnlyWithAttachments = GetUserInput();
@@ -183,6 +197,7 @@ namespace GmailSample
         {
             try
             {
+                // userIdは"me"と表示される
                 Console.WriteLine(userId);
                 // メールリストのリクエスト
                 UsersResource.MessagesResource.ListRequest request = service.Users.Messages.List(userId);
