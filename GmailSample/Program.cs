@@ -26,8 +26,8 @@ namespace GmailSample
         [Obsolete]
         static void Main(string[] args)
         {
-            //認証情報
-            string[] scopes = { GmailService.Scope.MailGoogleCom };
+            //認証情報(20240704_Google People APIのスコープ追加)
+            string[] scopes = { GmailService.Scope.MailGoogleCom, PeopleServiceService.Scope.UserinfoProfile, PeopleServiceService.Scope.UserinfoEmail };
             string app_name = "Google.Apis.Gmail.v1 Sample";
 
             //メール情報
@@ -58,6 +58,8 @@ namespace GmailSample
                     return;
                 }
             }
+
+            // クライアントシークレットファイルを読み込んで認証を取得
             using (var stream = new FileStream(Path.Combine(_homeDirectory, "Downloads", "clientsecret.json"), FileMode.Open, FileAccess.Read))
             {
                 string credpath = "token.json";
@@ -116,85 +118,60 @@ namespace GmailSample
                     mime_message.From.Add(new MailboxAddress(mailFromName, mailFromAddress));
                     mime_message.To.Add(new MailboxAddress(mailToName, mailToAddress));
                     mime_message.Subject = mailSubject;
-                    var text_part = new TextPart(MimeKit.Text.TextFormat.Plain);
-                    text_part.SetText(Encoding.UTF8, mailBody); // UTF-8エンコーディングを使用
-                    mime_message.Body = text_part;
-
-                    byte[] bytes;
-                    using (MemoryStream memoryStream = new MemoryStream())
+                    mime_message.Body = new TextPart(MimeKit.Text.TextFormat.Plain)
                     {
-                        mime_message.WriteTo(memoryStream); // MimeMessageをMemoryStreamに書き込む
-                        bytes = memoryStream.ToArray(); // MemoryStreamをバイト配列に変換
-                    }
+                        Text = mailBody
+                    }; // プレーンテキスト形式でメール本文を作成
 
-                    string raw_message = Convert.ToBase64String(bytes)
-                        .Replace('+', '-')
-                        .Replace('/', '_')
-                        .Replace("=", "");
-
-                    //メール送信
-                    var result = service.Users.Messages.Send(
-                    new Message()
+                    try
                     {
-                        Raw = raw_message
-                    },
-                    "me"
-                    ).Execute();
-
-                    Console.WriteLine("送信完了しました。");
-                    Console.WriteLine("Message ID: {0}", result.Id);
-
-                    // 送信したメールの内容を表示
-                    Console.WriteLine("送信したメールの内容を表示します。");
-                    Console.WriteLine("========================");
-
-                    // メールの取得
-                    var message = service.Users.Messages.Get("me", result.Id).Execute();
-
-                    // メールの送信者とタイトルを取得
-                    string from = "";
-                    string subject = "";
-
-                    //　取得するためにMessagePartHeaderクラスに
-                    //　Name プロパティが存在するかどうか確認をする
-                    foreach (var header in message.Payload.Headers)
-                    {
-                        if (header.Name == "From")
+                        //メール送信
+                        var rawMessage = EncodeMessage(mime_message); // メール本文を適切な形式にエンコーディング
+                        var result = service.Users.Messages.Send(
+                        new Message()
                         {
-                            from = header.Value;
-                        }
-                        else if (header.Name == "Subject")
-                        {
-                            subject = header.Value;
-                        }
+                            Raw = rawMessage
+                        },
+                        "me"
+                        ).Execute();
+
+                        // メール送信中の表示
+                        Console.WriteLine("送信中です。");
+
+                        // 送信完了後の表示
+                        Console.WriteLine("送信完了しました。");
+                        Console.WriteLine("========================");
+                        Console.WriteLine("送信したメールの内容:");
+                        Console.WriteLine($"From: {mailFromName} <{mailFromAddress}>");
+                        Console.WriteLine($"To: {mailToName} <{mailToAddress}>");
+                        Console.WriteLine($"Subject: {mailSubject}");
+                        Console.WriteLine($"Body: {mailBody}");
+                        Console.WriteLine("========================");
                     }
-
-                    // メールの内容表示
-                    Console.WriteLine("from: " + from);
-                    Console.WriteLine("subject: " + subject);
-                    // 
-                    Console.WriteLine("Message snippet: " + message.Snippet);
-                    Console.WriteLine("Message payload: " + message.Payload);
-                    Console.WriteLine("========================");
-                }
-
-
-
-                // ユーザー入力を促す
-                bool showOnlyWithAttachments = GetUserInput();
-
-                // メールの一覧を取得して表示
-                if (showOnlyWithAttachments)
-                {
-                    ListMessageWithAttachment(service, "me");
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"メールの送信中にエラーが発生しました: {ex.Message}");
+                    }
                 }
                 else
                 {
-                    ListMessageWithoutAttachment(service, "me");
+                    // ユーザー入力を促す
+                    bool showOnlyWithAttachments = GetUserInput();
+
+                    // メールの一覧を取得して表示
+                    if (showOnlyWithAttachments)
+                    {
+                        ListMessageWithAttachment(service, "me");
+                    }
+                    else
+                    {
+                        ListMessageWithoutAttachment(service, "me");
+                    }
                 }
+                Console.WriteLine("プログラムを終了するにはEnterキーを押してください...");
+                Console.ReadLine(); // ここでEnterキーの入力を待つようにする
             }
-            Console.WriteLine("プログラムを終了するにはEnterキーを押してください...");
-            Console.ReadLine(); // ここでEnterキーの入力を待つようにする
+
         }
 
         // MimeMessageをBase64エンコードして文字列として取得するメソッド
@@ -202,8 +179,8 @@ namespace GmailSample
         {
             using (var memoryStream = new MemoryStream())
             {
-                mimeMessage.WriteTo(memoryStream);
-                return Convert.ToBase64String(memoryStream.ToArray())
+                mimeMessage.WriteTo(memoryStream); // MimeMessageをMemoryStreamに書き込む
+                return Convert.ToBase64String(memoryStream.ToArray()) // MemoryStreamをバイト配列に変換
                     .Replace('+', '-')
                     .Replace('/', '_')
                     .Replace("=", "");
