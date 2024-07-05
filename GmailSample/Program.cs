@@ -10,6 +10,7 @@ using MimeKit;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Net.Mail;
 using System.Text;
 using System.Threading;
 
@@ -27,20 +28,15 @@ namespace GmailSample
         static void Main(string[] args)
         {
             //認証情報(20240704_Google People APIのスコープ追加)
-            string[] scopes = { GmailService.Scope.MailGoogleCom, PeopleServiceService.Scope.UserinfoProfile, PeopleServiceService.Scope.UserinfoEmail };
-            string app_name = "Google.Apis.Gmail.v1 Sample";
-
-            //メール情報
-            //string mail_from_name = "大嶋由真";
-            //// string mail_from_address = "yumastudy.0201@gmail.com";
-            //string mail_subject = "テストメール";
-            //string mail_body = @"テストメールを送信します。
-            //   受信確認できましたら、返事をお願いします。
-            //   ちなみにこれってスニペットで本文全て取得できているんですかね？
-            //   あと、メールの本文取得メソッドも追加してみました。
-            //   確認お願いします。
-
-            //   テスト太郎より";
+            string[] scopes = { GmailService.Scope.MailGoogleCom,
+                                PeopleServiceService.Scope.UserinfoProfile,
+                                PeopleServiceService.Scope.UserinfoEmail,
+                                PeopleServiceService.Scope.ContactsReadonly,
+                                "https://www.googleapis.com/auth/user.emails.read",
+                                "https://www.googleapis.com/auth/userinfo.email",
+                                "https://www.googleapis.com/auth/userinfo.profile"
+            };
+            string appName = "Google.Apis.Gmail.v1 Sample";
 
             //認証
             UserCredential credential;
@@ -59,37 +55,45 @@ namespace GmailSample
                 }
             }
 
-            // クライアントシークレットファイルを読み込んで認証を取得
-            using (var stream = new FileStream(Path.Combine(_homeDirectory, "Downloads", "clientsecret.json"), FileMode.Open, FileAccess.Read))
+            // 古い認証情報の削除
+            string credPath = Path.Combine(_homeDirectory, ".credentials/gmail-dotnet-quickstart.json");
+            if (File.Exists(credPath))
             {
-                string credpath = "token.json";
+                File.Delete(credPath);
+            }
+
+            // クライアントシークレットファイルを読み込んで認証を取得
+            using (var stream = new FileStream(clientSecretPath, FileMode.Open, FileAccess.Read))
+            {
                 credential = GoogleWebAuthorizationBroker.AuthorizeAsync(
                         GoogleClientSecrets.Load(stream).Secrets,
-                        new[] { GmailService.Scope.MailGoogleCom },
+                        scopes,
                         "user",
                         CancellationToken.None,
-                        new FileDataStore(credpath, true)).Result;
+                        new FileDataStore(credPath, true)).Result;
+            }
+            // GmailServiceの初期化
+            var gmailService = new GmailService(new BaseClientService.Initializer()
+            {
+                ApplicationName = appName,
+                HttpClientInitializer = credential
+            });
 
-                // GmailServiceの初期化
-                var service = new GmailService(new BaseClientService.Initializer()
-                {
-                    ApplicationName = app_name,
-                    HttpClientInitializer = credential
-                });
+            // PeopleServiceの初期化
+            var peopleService = new PeopleServiceService(new BaseClientService.Initializer()
+            {
+                ApplicationName = appName,
+                HttpClientInitializer = credential
+            });
 
-                // peopleserviceの初期化
-                var peopleService = new PeopleServiceService(new BaseClientService.Initializer()
-                {
-                    ApplicationName = app_name,
-                    HttpClientInitializer = credential
-                });
-
-                // 認証されたアカウントのプロフィール情報を取得
+            // 認証されたアカウントのプロフィール情報を取得
+            try
+            {
                 var profileRequest = peopleService.People.Get("people/me");
                 profileRequest.PersonFields = "names,emailAddresses";
                 var profile = profileRequest.Execute();
 
-                //ユーザーのメールアドレスと表示名を取得
+                // ユーザーのメールアドレスと表示名を取得
                 string mailFromAddress = profile.EmailAddresses[0].Value;
                 string mailFromName = profile.Names[0].DisplayName;
 
@@ -106,9 +110,8 @@ namespace GmailSample
                 Console.WriteLine("メールの本文を入力してください: ");
                 string mailBody = Console.ReadLine();
 
-
                 // メール送信確認
-                Console.WriteLine("メールを送信しますか？(y/n)：　");
+                Console.WriteLine("メールを送信しますか？(y/n)：");
                 string sendMailResponse = Console.ReadLine().ToLower();
 
                 if (sendMailResponse == "y")
@@ -127,7 +130,7 @@ namespace GmailSample
                     {
                         //メール送信
                         var rawMessage = EncodeMessage(mime_message); // メール本文を適切な形式にエンコーディング
-                        var result = service.Users.Messages.Send(
+                        var result = gmailService.Users.Messages.Send(
                         new Message()
                         {
                             Raw = rawMessage
@@ -161,19 +164,24 @@ namespace GmailSample
                     // メールの一覧を取得して表示
                     if (showOnlyWithAttachments)
                     {
-                        ListMessageWithAttachment(service, "me");
+                        ListMessageWithAttachment(gmailService, "me");
                     }
                     else
                     {
-                        ListMessageWithoutAttachment(service, "me");
+                        ListMessageWithoutAttachment(gmailService, "me");
                     }
                 }
-                Console.WriteLine("プログラムを終了するにはEnterキーを押してください...");
-                Console.ReadLine(); // ここでEnterキーの入力を待つようにする
+
+            }
+            catch (Google.GoogleApiException e)
+            {
+                Console.WriteLine($"プロフィール情報の取得中にエラーが発生しました: {e.Message}");
+                Console.WriteLine("認証スコープが不足している可能性があります。スコープを確認してください。");
             }
 
+            Console.WriteLine("プログラムを終了するにはEnterキーを押してください...");
+            Console.ReadLine(); // ここでEnterキーの入力を待つようにする
         }
-
         // MimeMessageをBase64エンコードして文字列として取得するメソッド
         private static string EncodeMessage(MimeMessage mimeMessage)
         {
@@ -421,5 +429,7 @@ namespace GmailSample
             }
 
         }
+
     }
+
 }
