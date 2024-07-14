@@ -4,7 +4,6 @@ using Google.Apis.Gmail.v1.Data;
 using Google.Apis.PeopleService.v1;
 using Google.Apis.PeopleService.v1.Data;
 using Google.Apis.Services;
-using Google.Apis.Util;
 using Google.Apis.Util.Store;
 using MimeKit;
 using System;
@@ -408,7 +407,7 @@ namespace GmailSample
         /// </summary>
         /// <param name="payload">メールのペイロード</param>
         /// <returns>メールの本文</returns>
-        private static string GetMessageBody(MessagePart payload)
+        private static string GetMessageBody(Google.Apis.Gmail.v1.Data.MessagePart payload)
         {
             if (payload.Parts == null)
             {
