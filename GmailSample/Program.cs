@@ -187,6 +187,7 @@ namespace GmailSample
             UsersResource.MessagesResource.ListRequest request = gmailService.Users.Messages.List("me");
             request.LabelIds = "INBOX";
             request.IncludeSpamTrash = false;
+            string? lastMessageId = null;
 
             while (isReceivingEmails)
             {
@@ -197,8 +198,12 @@ namespace GmailSample
                     {
                         foreach (var message in response.Messages)
                         {
+                            if (message.Id == lastMessageId)
+                                break;
+
+
                             var emailInfoReq = gmailService.Users.Messages.Get("me", message.Id);
-                            var emailInfoResponse = emailInfoReq.Execute();
+                            var emailInfoResponse = await emailInfoReq.ExecuteAsync();
                             if (emailInfoResponse != null)
                             {
                                 string from = "";
@@ -224,17 +229,32 @@ namespace GmailSample
 
                                 body = GetMessageBody(emailInfoResponse.Payload);
 
-                                Console.WriteLine("新しいメールを受信しました。確認しますか？(y/n)");
-                                if (Console.ReadLine()?.ToLower() == "y")
+                                while (true)
                                 {
-                                    Console.WriteLine($"日付: {date}");
-                                    Console.WriteLine($"差出人: {from}");
-                                    Console.WriteLine($"件名: {subject}");
-                                    Console.WriteLine("本文:");
-                                    Console.WriteLine(body);
-                                    Console.WriteLine("-----------------------------------------------------");
+                                    Console.WriteLine("新しいメールを受信しました。確認しますか？(y/n)");
+                                    string? input = Console.ReadLine()?.ToLower();
+                                    if (input == "y")
+                                    {
+                                        Console.WriteLine($"日付: {date}");
+                                        Console.WriteLine($"差出人: {from}");
+                                        Console.WriteLine($"件名: {subject}");
+                                        Console.WriteLine("本文:");
+                                        Console.WriteLine(body);
+                                        Console.WriteLine("-----------------------------------------------------");
+                                        break;
+                                    }
+                                    else if (input == "n")
+                                    {
+                                        break;
+                                    }
+                                    else
+                                    {
+                                        Console.WriteLine("無効な選択です。もう一度入力してください。");
+                                    }
                                 }
+
                             }
+                            lastMessageId = message.Id;
                         }
                     }
 
@@ -260,8 +280,12 @@ namespace GmailSample
                 {
                     if (part.MimeType == "text/plain")
                     {
-                        body = Base64UrlDecode(part.Body.Data);
+                        body += Base64UrlDecode(part.Body.Data);
                         break;
+                    }
+                    else if (part.Parts != null)
+                    {
+                        body += GetMessageBody(part);
                     }
                 }
             }
@@ -270,13 +294,15 @@ namespace GmailSample
 
         private static string Base64UrlDecode(string input)
         {
-            string incoming = input.Replace('-', '+').Replace('_', '/');
+            string s = input.Replace('-', '+').Replace('_', '/');
             switch (input.Length % 4)
             {
-                case 2: incoming += "=="; break;
-                case 3: incoming += "="; break;
+                case 0: break;
+                case 2: s += "=="; break;
+                case 3: s += "="; break;
+                default: throw new System.Exception("Illegal base64url string!");
             }
-            byte[] bytes = Convert.FromBase64String(incoming);
+            byte[] bytes = Convert.FromBase64String(s);
             return System.Text.Encoding.UTF8.GetString(bytes);
         }
 
@@ -285,7 +311,10 @@ namespace GmailSample
             using (var memoryStream = new MemoryStream())
             {
                 mimeMessage.WriteTo(memoryStream);
-                return Convert.ToBase64String(memoryStream.ToArray()).Replace('+', '-').Replace('/', '_').Replace("=", "");
+                return Convert.ToBase64String(memoryStream.ToArray())
+                    .Replace('+', '-')
+                    .Replace('/', '_')
+                    .Replace("=", "");
             }
         }
 
